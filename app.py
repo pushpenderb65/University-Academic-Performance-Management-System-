@@ -1,3 +1,4 @@
+import os
 import streamlit as st
 import pandas as pd
 from sqlalchemy import create_engine, text
@@ -10,9 +11,12 @@ st.set_page_config(
 )
 
 # -------------------------------------------------------------
-# Database Connection Setup
+# Safe Database Path Detection (Works both locally & Cloud)
 # -------------------------------------------------------------
-DB_URI = "sqlite:///university.db"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.path.join(BASE_DIR, "university.db")
+DB_URI = f"sqlite:///{DB_PATH}"
+
 @st.cache_resource
 def get_db_engine():
     return create_engine(DB_URI)
@@ -33,11 +37,10 @@ with st.sidebar:
     st.header("📌 Project Details")
     st.markdown("""
     **University Academic & Performance System**  
-    *A full-stack relational database analytics pipeline built with MySQL & Python.*
+    *A full-stack relational database analytics pipeline built with SQL & Python.*
     """)
     st.divider()
     
-    # Developer Attribution
     st.markdown("### 👨‍💻 Developer")
     st.markdown("**Pushpender**")
     st.markdown("[🔗 Connect on LinkedIn](https://www.linkedin.com/in/push2003)")
@@ -47,7 +50,7 @@ with st.sidebar:
 # UI Header & Key Metrics
 # -------------------------------------------------------------
 st.title("🎓 University Academic & Performance Dashboard")
-st.markdown("Real-time reporting and query portal powered by **MySQL & Streamlit**.")
+st.markdown("Real-time reporting and query portal powered by **SQL & Streamlit**.")
 st.divider()
 
 # High-Level Metric Cards
@@ -58,15 +61,15 @@ total_courses_df = run_query("SELECT COUNT(*) AS total FROM Courses;")
 total_faculty_df = run_query("SELECT COUNT(*) AS total FROM Instructors;")
 avg_gpa_df = run_query("SELECT ROUND(AVG(cgpa), 2) AS avg_cgpa FROM student_gpa_report;")
 
-col_m1.metric("Total Students", total_students_df['total'][0])
-col_m2.metric("Active Courses", total_courses_df['total'][0])
-col_m3.metric("Faculty Members", total_faculty_df['total'][0])
-col_m4.metric("University Avg CGPA", avg_gpa_df['avg_cgpa'][0])
+col_m1.metric("Total Students", int(total_students_df['total'][0]))
+col_m2.metric("Active Courses", int(total_courses_df['total'][0]))
+col_m3.metric("Faculty Members", int(total_faculty_df['total'][0]))
+col_m4.metric("University Avg CGPA", float(avg_gpa_df['avg_cgpa'][0]))
 
 st.divider()
 
 # -------------------------------------------------------------
-# Main Tabs: Dashboard, Search, and Low Attendance Alert
+# Main Tabs
 # -------------------------------------------------------------
 tab1, tab2, tab3 = st.tabs(["📊 Department Leaderboard", "🔍 Student Transcript Lookup", "⚠️ Attendance Alerts (<75%)"])
 
@@ -97,7 +100,7 @@ with tab1:
     
     st.dataframe(df_leaderboard, use_container_width=True, hide_index=True)
 
-# TAB 2: Student Transcript & Profile Lookup
+# TAB 2: Student Transcript Lookup
 with tab2:
     st.subheader("Student Academic Profile & Coursework")
     
@@ -113,7 +116,7 @@ with tab2:
             FROM student_gpa_report
             WHERE student_id = :sid;
         """
-        profile_df = run_query(profile_query, params={"sid": search_id})
+        profile_df = run_query(profile_query, params={"sid": int(search_id)})
         
         if not profile_df.empty:
             student_data = profile_df.iloc[0]
@@ -125,19 +128,20 @@ with tab2:
             c4.metric("Dept Rank", f"#{student_data['dept_rank']}")
             
             st.markdown("#### Enrolled Courses & Grades")
+            # SQLite safe query (using || for string concatenation)
             courses_query = """
                 SELECT 
                     c.course_code AS 'Course Code',
                     c.course_title AS 'Course Title',
                     c.credits AS 'Credits',
                     e.grade AS 'Grade',
-                    CONCAT(e.attendance_percentage, '%') AS 'Attendance'
+                    (e.attendance_percentage || '%') AS 'Attendance'
                 FROM Enrollments e
                 JOIN Sections sec ON e.section_id = sec.section_id
                 JOIN Courses c ON sec.course_id = c.course_id
                 WHERE e.student_id = :sid;
             """
-            student_courses_df = run_query(courses_query, params={"sid": search_id})
+            student_courses_df = run_query(courses_query, params={"sid": int(search_id)})
             st.table(student_courses_df)
         else:
             st.warning(f"No records found for Student ID: {search_id}")
@@ -153,7 +157,7 @@ with tab3:
             student_name AS 'Name',
             dept_name AS 'Department',
             cgpa AS 'Current CGPA',
-            CONCAT(avg_attendance, '%') AS 'Average Attendance'
+            (avg_attendance || '%') AS 'Average Attendance'
         FROM student_gpa_report
         WHERE avg_attendance < 75.0
         ORDER BY avg_attendance ASC;
@@ -165,9 +169,7 @@ with tab3:
     else:
         st.success("All students currently meet the minimum 75% attendance criteria.")
 
-# -------------------------------------------------------------
-# Bottom Footer: Attribution
-# -------------------------------------------------------------
+# Footer
 st.markdown("---")
 st.markdown(
     "<div style='text-align: center; color: gray; font-size: 14px;'>"
