@@ -12,8 +12,7 @@ st.set_page_config(
 # -------------------------------------------------------------
 # Database Connection Setup
 # -------------------------------------------------------------
-DB_URI = "mysql+pymysql://root:2003@localhost:3306/university_db"
-
+DB_URI = "sqlite:///university.db"
 @st.cache_resource
 def get_db_engine():
     return create_engine(DB_URI)
