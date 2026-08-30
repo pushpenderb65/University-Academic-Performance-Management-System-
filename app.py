@@ -46,18 +46,26 @@ ADMIN_CREDENTIALS = {
 }
 
 
-def check_student_login(student_id: int, student_name: str) -> bool:
-    """Validate a student by ID + Name against the Students table."""
+def check_student_login(student_id: int, student_name: str):
+    """Validate a student by ID + Name against the student_gpa_report view.
+    Returns (True, None) on success, or (False, error_message) on failure."""
     query = """
         SELECT student_id, student_name
-        FROM Students
+        FROM student_gpa_report
         WHERE student_id = :sid;
     """
-    df = run_query(query, params={"sid": student_id})
+    try:
+        df = run_query(query, params={"sid": student_id})
+    except Exception as e:
+        return False, f"Database error while checking login: {e}"
+
     if df.empty:
-        return False
+        return False, "No student found with that Student ID."
+
     db_name = str(df.iloc[0]["student_name"]).strip().lower()
-    return db_name == student_name.strip().lower()
+    if db_name != student_name.strip().lower():
+        return False, "Name does not match our records for this Student ID."
+    return True, None
 
 
 def init_session_state():
@@ -118,7 +126,8 @@ def show_login_page():
                 submitted = st.form_submit_button("Login", use_container_width=True)
 
                 if submitted:
-                    if check_student_login(int(sid), sname):
+                    ok, err = check_student_login(int(sid), sname)
+                    if ok:
                         st.session_state.logged_in = True
                         st.session_state.role = "Student"
                         st.session_state.student_id = int(sid)
@@ -126,7 +135,7 @@ def show_login_page():
                         st.success("Login successful! Redirecting...")
                         st.rerun()
                     else:
-                        st.error("Student ID / Name not found. Please check and try again.")
+                        st.error(err)
 
 
 # -------------------------------------------------------------
